@@ -10,6 +10,7 @@ reach. The ID handed back to the agent is a server-minted handle, the pattern th
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import sqlite3
 import time
@@ -50,18 +51,23 @@ class PendingAction:
 
     @property
     def expired(self) -> bool:
-        return self.state == "pending" and time.time() > self.expires_at
+        return self.state in {"pending", "approved"} and time.time() >= self.expires_at
 
 
 class PendingStore:
     def __init__(self, path: Path | str, ttl_seconds: int = 900) -> None:
         self.path = Path(path)
         self.ttl = ttl_seconds
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with self._db() as db:
             db.executescript(SCHEMA)
 
     def _db(self) -> sqlite3.Connection:
+        fd = os.open(self.path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+        finally:
+            os.close(fd)
         db = sqlite3.connect(self.path, timeout=10, isolation_level="IMMEDIATE")
         db.row_factory = sqlite3.Row
         return db
@@ -138,11 +144,12 @@ class PendingStore:
 
     def claim(self, action_id: str) -> PendingAction:
         """Atomically move an approved action to ``executing``, so it runs at most once."""
+        now = time.time()
         with self._db() as db:
             changed = db.execute(
                 "UPDATE pending_actions SET state = 'executing', executed_at = ?"
-                " WHERE id = ? AND state = 'approved'",
-                (time.time(), action_id),
+                " WHERE id = ? AND state = 'approved' AND expires_at > ?",
+                (now, action_id, now),
             ).rowcount
         if changed:
             action = self.get(action_id)
@@ -154,7 +161,7 @@ class PendingStore:
         action = self.get(action_id)
         if action is None:
             return ApprovalError(f"no pending action {action_id!r}")
-        if action.state == "pending" and time.time() > action.expires_at:
+        if action.expired:
             self._set_state(action_id, "expired")
             return ApprovalError(f"action {action_id} expired")
         if action.state == "pending" and wanted == "approved":
@@ -175,7 +182,8 @@ class PendingStore:
     def expire_stale(self) -> int:
         with self._db() as db:
             cur = db.execute(
-                "UPDATE pending_actions SET state = 'expired' WHERE state = 'pending' AND expires_at < ?",
+                "UPDATE pending_actions SET state = 'expired'"
+                " WHERE state IN ('pending', 'approved') AND expires_at <= ?",
                 (time.time(),),
             )
             return cur.rowcount

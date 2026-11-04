@@ -68,8 +68,15 @@ def _dispatch(args: argparse.Namespace, cfg: Config) -> int:
         case "approve":
             return _approve(cfg, args.id, run=args.run)
         case "reject":
-            store = PendingStore(cfg.state_db, cfg.approval_ttl_seconds)
-            store.decide(args.id, "rejected")
+            app = build_app(cfg)
+            action = app.pending.decide(args.id, "rejected")
+            app.audit.write(
+                "rejected",
+                tool=action.tool,
+                args=action.args,
+                pending_action_id=action.id,
+                outcome="rejected",
+            )
             print(f"rejected {args.id}")
             return 0
     return 2  # pragma: no cover - argparse rejects unknown commands

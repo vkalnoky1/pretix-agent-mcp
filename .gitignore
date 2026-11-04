@@ -10,4 +10,7 @@ build/
 *.sqlite3
 *.db
 audit.jsonl
-uv.lock
+work/
+config.json
+.env.*
+!.env.example

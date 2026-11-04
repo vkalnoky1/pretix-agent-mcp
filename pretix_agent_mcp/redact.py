@@ -27,7 +27,16 @@ NAME_KEYS = {
     "invoice_name",
     "contact_name",
 }
-EMAIL_KEYS = {"email", "attendee_email", "invoice_email", "contact_email", "sender"}
+EMAIL_KEYS = {
+    "email",
+    "attendee_email",
+    "invoice_email",
+    "contact_email",
+    "sender",
+    "mail_bcc",
+    "mail_from",
+    "mail_reply_to",
+}
 PHONE_KEYS = {"phone", "telephone", "mobile", "invoice_phone"}
 ADDRESS_KEYS = {
     "street",
@@ -80,9 +89,11 @@ def mask_phone(value: str) -> str:
 
 
 def _mask_scalar(key: str, value: Any) -> Any:
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None:
         return value
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str):
+        return REDACTED
+    if not value:
         return value
     if key in EMAIL_KEYS or "@" in value and key in PII_KEYS:
         return mask_email(value)
@@ -106,7 +117,7 @@ def redact(data: Any, *, enabled: bool = True, _key: str = "", _in_pii: bool = F
         personal = _in_pii or bool(PERSON_MARKERS & {str(k).lower() for k in data})
         for key, value in data.items():
             lkey = key.lower() if isinstance(key, str) else str(key)
-            inside = _in_pii or lkey in CONTAINER_KEYS
+            inside = _in_pii or lkey in CONTAINER_KEYS or lkey in PII_KEYS
             if isinstance(value, (dict, list)):
                 out[key] = redact(value, enabled=True, _key=lkey, _in_pii=inside)
             elif lkey in SAFE_IN_CONTAINER and lkey not in PII_KEYS:
@@ -116,13 +127,13 @@ def redact(data: Any, *, enabled: bool = True, _key: str = "", _in_pii: bool = F
             elif inside or lkey in PII_KEYS:
                 out[key] = _mask_scalar(lkey if lkey in PII_KEYS else _pii_kind(lkey, value), value)
             else:
-                out[key] = value
+                out[key] = scrub_text(value) if isinstance(value, str) else value
         return out
     if isinstance(data, list):
         return [redact(v, enabled=True, _key=_key, _in_pii=_in_pii) for v in data]
     if _in_pii:
         return _mask_scalar(_key, data)
-    return data
+    return scrub_text(data) if isinstance(data, str) else data
 
 
 def _pii_kind(key: str, value: Any) -> str:

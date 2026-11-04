@@ -31,7 +31,7 @@ def test_high_risk_class_exposes_high_risk_tools(make_config):
     assert "publish_event" in names(make_config(MCP_CAPABILITIES="read,write,write:high-risk"))
 
 
-def test_tool_allowlist_wins_over_capability_classes(make_config):
+def test_tool_allowlist_narrows_capability_classes(make_config):
     cfg = make_config(MCP_CAPABILITIES="read,write", MCP_TOOL_ALLOWLIST="list_events,get_event")
     assert names(cfg) == {"list_events", "get_event"}
 

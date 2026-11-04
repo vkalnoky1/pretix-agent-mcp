@@ -206,7 +206,9 @@ async def execute_approved(app: App, action_id: str) -> dict[str, Any]:
 
 
 async def _propose(app: App, spec: ToolSpec, kwargs: dict[str, Any]) -> dict[str, Any]:
+    await _check_test_mode(app, spec, kwargs, "write:high-risk")
     preview, snapshot = await _build_preview(app, spec, kwargs)
+    preview = scrub_text(preview)
     action = app.pending.propose(spec.name, kwargs, preview, snapshot)
     app.audit.write(
         "proposed",
@@ -243,6 +245,9 @@ async def _execute(
     capability: str,
     action_id: str | None = None,
 ) -> dict[str, Any]:
+    # Approved actions must obey the current safety profile too, not just the profile
+    # under which they were proposed. This also covers execute_pending_action.
+    await _check_test_mode(app, spec, kwargs, capability)
     try:
         result = await spec.fn(app, **kwargs)
     except Exception as exc:
@@ -265,6 +270,22 @@ async def _execute(
         outcome = payload.get("status") if isinstance(payload.get("status"), str) else "ok"
         app.audit.write("executed", tool=spec.name, args=kwargs, outcome=outcome, pending_action_id=action_id)
     return redact(payload, enabled=app.cfg.redact_pii)
+
+
+async def _check_test_mode(app: App, spec: ToolSpec, kwargs: dict[str, Any], capability: str) -> None:
+    """Keep write-capable evaluation confined to explicitly allowed test events."""
+    if not app.cfg.test_mode_only or capability == "read":
+        return
+    if spec.name == "publish_event":
+        raise PermissionError("publishing is disabled by PRETIX_TEST_MODE_ONLY")
+    # These tools create their destination with testmode=true and live=false.
+    if spec.name in {"create_event", "clone_event", "execute_pending_action"}:
+        return
+    if not kwargs.get("event"):
+        raise PermissionError("test-only writes require an explicit event")
+    event = await app.event(kwargs["event"])
+    if event.get("testmode") is not True:
+        raise PermissionError("writes require a test-mode event under PRETIX_TEST_MODE_ONLY")
 
 
 def _iso(timestamp: float) -> str:

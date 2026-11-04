@@ -1,15 +1,15 @@
 .PHONY: setup test lint fmt ci tools serve
 
 setup:                     ## install the package and dev dependencies into .venv
-	uv venv
-	uv pip install -e ".[dev]"
+	uv sync --locked --extra dev --group build --no-install-project
+	uv sync --locked --extra dev --group build --no-build-isolation
 
 test:
-	uv run pytest -q
+	uv run --locked --no-sync pytest -q
 
 lint:
-	uv run ruff check .
-	uv run ruff format --check .
+	uv run --locked --no-sync ruff check .
+	uv run --locked --no-sync ruff format --check .
 
 fmt:
 	uv run ruff format .
