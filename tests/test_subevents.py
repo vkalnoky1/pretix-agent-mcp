@@ -72,6 +72,7 @@ async def test_create_subevents_batch_with_quotas(api, call):
         "name": "Stammtisch",
         "size": 40,
         "items": [3],
+        "variations": [],
         "subevent": 11,
     }
 

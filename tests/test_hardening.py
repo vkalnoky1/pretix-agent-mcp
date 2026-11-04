@@ -97,6 +97,29 @@ async def test_approved_action_obeys_new_test_only_profile(make_app, api):
     assert api.sent("DELETE", "events/conf27") == []
 
 
+async def test_product_can_be_created_with_the_required_first_variation(app, api):
+    api.route("GET", "events/conf27", {"slug": "conf27", "live": False, "testmode": True})
+    api.route("POST", "events/conf27/items", {"id": 3, "variations": [{"id": 4, "value": "Adult"}]})
+    result = await invoke(app, "create_product", event="conf27", name="Admission", first_variation="Adult")
+    assert api.sent("POST", "events/conf27/items")[0]["variations"] == [{"value": "Adult"}]
+    assert result["created"]["variations"][0]["id"] == 4
+
+
+async def test_question_gets_a_unique_identifier_when_omitted(app, api):
+    api.route("GET", "events/conf27", {"slug": "conf27", "live": False, "testmode": True})
+    api.route("POST", "events/conf27/questions", {"id": 3})
+    await invoke(app, "create_question", event="conf27", question="Test question", type="S")
+    identifier = api.sent("POST", "events/conf27/questions")[0]["identifier"]
+    assert identifier.startswith("agent-") and len(identifier) > 10
+
+
+async def test_variation_quota_requires_parent_product_before_posting(app, api):
+    api.route("GET", "events/conf27", {"slug": "conf27", "live": False, "testmode": True})
+    with pytest.raises(ValidationError, match="parent product"):
+        await invoke(app, "create_quota", event="conf27", name="Test quota", variations=[4], size=10)
+    assert api.sent("POST", "events/conf27/quotas") == []
+
+
 def test_masking_covers_settings_unknown_text_and_non_string_answers():
     raw = {
         "settings": {"mail_bcc": "alice@example.org", "plugin_note": "Contact alice@example.org"},

@@ -54,7 +54,7 @@ def receive_token(port: int) -> str:
                 "<h1>Pretix test-only verification</h1>"
                 "<p>The API token stays in memory and is never written to disk.</p>"
                 '<form method="post"><label>Test-only API token '
-                '<input name="token" type="password" autocomplete="off" required></label>'
+                '<input name="token" type="text" autocomplete="off" spellcheck="false" required></label>'
                 "<button>Run test-only verification</button></form>",
             )
 
@@ -72,6 +72,7 @@ def receive_token(port: int) -> str:
             if not token.isascii() or not token.isalnum() or not 20 <= len(token) <= 200:
                 return self.reply(400, "Invalid token format")
             received.append(token)
+            print(f"TOKEN_LENGTH={len(token)}", flush=True)
             self.reply(
                 200,
                 "<h1>Token received in memory</h1><p>Verification is running. You may close this tab.</p>",
@@ -230,7 +231,12 @@ async def verify(args, token: str, receipt: dict) -> dict:
                 cleanup.append(("delete_category", {"category_id": category}))
                 item = (
                     await tool(
-                        "create_product", name=label, default_price="25.00", category=category, tax_rule=tax
+                        "create_product",
+                        name=label,
+                        default_price="25.00",
+                        category=category,
+                        tax_rule=tax,
+                        first_variation="Initial test variation",
                     )
                 )["created"]["id"]
                 cleanup.append(("delete_product", {"item_id": item}))
@@ -262,7 +268,14 @@ async def verify(args, token: str, receipt: dict) -> dict:
                 subevent = dates["created"][0]["id"]
                 cleanup.append(("delete_subevent", {"subevent_id": subevent}))
                 quota = (
-                    await tool("create_quota", name=label, size=10, variations=[variation], subevent=subevent)
+                    await tool(
+                        "create_quota",
+                        name=label,
+                        size=10,
+                        items=[item],
+                        variations=[variation],
+                        subevent=subevent,
+                    )
                 )["created"]["id"]
                 cleanup.append(("delete_quota", {"quota_id": quota}))
                 await tool("update_quota", quota_id=quota, size=12)
@@ -339,6 +352,16 @@ def main():
         asyncio.run(verify(args, receive_token(args.port), receipt))
     except Exception as exc:
         receipt.update(status="failed", failure_type=type(exc).__name__)
+
+        def error_types(error):
+            out = [{"type": type(error).__name__}]
+            if isinstance(error, PretixError):
+                out[0]["http_status"] = error.status
+            for child in getattr(error, "exceptions", []):
+                out.extend(error_types(child))
+            return out
+
+        receipt["error_types"] = error_types(exc)
     path = Path(args.receipt)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(receipt, indent=2) + "\n")

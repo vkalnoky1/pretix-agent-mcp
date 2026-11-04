@@ -13,6 +13,7 @@ on quotas, not on products, so a product is sold out when every quota covering i
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 from ..registry import App, tool
@@ -212,11 +213,13 @@ async def create_product(
     available_from: str | None = None,
     available_until: str | None = None,
     hide_without_voucher: bool = False,
+    first_variation: str | None = None,
 ) -> dict:
     """Create a product. ``default_price`` is a decimal string like "23.00", never a number.
 
     A new product sells nothing until a quota covers it — follow up with create_quota.
-    Variations are added afterwards with create_product_variation, one call each.
+    To use variations, pass ``first_variation`` now: pretix cannot turn a plain product
+    into a variation product later. Add further choices with create_product_variation.
     ``category`` and ``tax_rule`` are numeric ids from list_categories / list_tax_rules.
     ``available_from``/``available_until`` are ISO 8601 timestamps.
     """
@@ -233,6 +236,7 @@ async def create_product(
             "available_from": available_from,
             "available_until": available_until,
             "hide_without_voucher": hide_without_voucher,
+            "variations": [{"value": first_variation}] if first_variation is not None else None,
         }
     )
     created = await app.pretix.post("events", app.check_event(event), "items", json=payload)
@@ -430,17 +434,19 @@ async def create_quota(
     """Create a quota: how many of the listed products/variations may be sold in total.
 
     ``size`` omitted or null means unlimited; 0 blocks sales entirely. A quota that lists a
-    product with variations must list the ``variations`` ids instead of relying on the item.
+    product with variations must list both its parent ``items`` id and the ``variations`` ids.
     ``subevent`` is required for an event series and must be omitted otherwise.
     """
     payload = clean(
         {
             "name": name,
-            "items": _ids(items, "items"),
-            "variations": _ids(variations, "variations"),
+            "items": _ids(items, "items") or [],
+            "variations": _ids(variations, "variations") or [],
             "subevent": _opt_id(subevent, "subevent"),
         }
     )
+    if variations and not items:
+        raise ValidationError("variation quotas require their parent product ids in items")
     payload["size"] = _size(size)  # explicit: null is meaningful (unlimited), clean() would drop it
     created = await app.pretix.post("events", app.check_event(event), "quotas", json=payload)
     return {"created": pick(created, *QUOTA_FIELDS)}
@@ -504,6 +510,7 @@ async def create_question(
     choice, F file upload, D date, H time, W datetime, CC country, TEL phone. ``options`` is
     the list of choice labels and is required for C and M, rejected for every other type.
     ``items`` limits the question to those products; empty means it is asked for none.
+    A unique identifier is generated if omitted; current Pretix Hosted requires it.
     """
     kind = _question_type(type)
     if kind in CHOICE_TYPES and not options:
@@ -517,7 +524,7 @@ async def create_question(
             "required": required,
             "items": _ids(items, "items"),
             "position": position,
-            "identifier": identifier,
+            "identifier": identifier or f"agent-{secrets.token_hex(6)}",
             "help_text": help_text,
             "ask_during_checkin": ask_during_checkin,
             "options": [{"answer": label} for label in options] if options else None,

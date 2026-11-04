@@ -20,6 +20,9 @@ The fork retains the upstream MIT license and purpose-built MCP tools.
   `requirements-*.txt` exports. Direct runtime dependencies and Hatchling are pinned.
 - Docker builds this source, uses a digest-pinned Python image and hash-checked dependencies,
   and runs as UID 10001. The example no longer pulls a mutable prebuilt MCP image.
+- Real Pretix Hosted checks also corrected catalog compatibility: create the first
+  variation with the product, generate missing question identifiers, send both quota
+  relation lists explicitly, and require parent product IDs for variation quotas.
 
 ## Install and verify
 
