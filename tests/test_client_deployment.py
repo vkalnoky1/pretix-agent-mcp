@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 
@@ -40,30 +39,30 @@ def test_keychain_failure_never_exposes_output(monkeypatch, capsys, tmp_path):
             {"url": "https://mcp.example.org/mcp", "keychain_service": "test", "keychain_account": "test"}
         )
     )
-    monkeypatch.setattr(
-        "deployment.client.subprocess.run",
-        lambda *a, **k: SimpleNamespace(
-            returncode=1, stdout="private-credential-value", stderr="private-error"
-        ),
-    )
+
+    def fail(*a):
+        raise RuntimeError("private-credential-value private-error")
+
+    monkeypatch.setattr("deployment.client.read", fail)
     assert main(["--profile", str(path), "--check"]) == 1
     captured = capsys.readouterr()
     assert not captured.out
     assert "private-credential" not in captured.err and "private-error" not in captured.err
 
 
-def test_keychain_lookup_has_no_secret_in_command_arguments(monkeypatch):
+def test_keychain_lookup_uses_only_item_references(monkeypatch):
     seen = []
 
-    def run(args, **kwargs):
+    def read(*args):
         seen.extend(args)
-        return SimpleNamespace(returncode=0, stdout="x" * 64, stderr="")
+        return "x" * 64
 
-    monkeypatch.setattr("deployment.client.subprocess.run", run)
+    monkeypatch.setattr("deployment.client.read", read)
     assert (
         load_token(ClientProfile("https://mcp.example.org/mcp", "test-service", "test-account")) == "x" * 64
     )
     assert "x" * 64 not in seen
+    assert seen == ["test-service", "test-account"]
 
 
 async def test_relay_preserves_ids_results_and_cancellation_messages():

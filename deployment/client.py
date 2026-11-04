@@ -11,15 +11,19 @@ import argparse
 import asyncio
 import json
 import logging
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 from mcp.server.stdio import stdio_server
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, LATEST_PROTOCOL_VERSION, PROTOCOL_VERSION_META_KEY
+
+from pretix_agent_mcp.keychain import read
 
 
 @dataclass(frozen=True)
@@ -51,22 +55,8 @@ def load_profile(path: Path) -> ClientProfile:
 
 
 def load_token(profile: ClientProfile) -> str:
-    result = subprocess.run(
-        [
-            "/usr/bin/security",
-            "find-generic-password",
-            "-s",
-            profile.keychain_service,
-            "-a",
-            profile.keychain_account,
-            "-w",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    token = result.stdout.strip()
-    if result.returncode or len(token) < 24 or not token.isascii() or any(c.isspace() for c in token):
+    token = read(profile.keychain_service, profile.keychain_account).strip()
+    if len(token) < 24 or not token.isascii() or any(c.isspace() for c in token):
         raise RuntimeError("MCP credential unavailable in Keychain")
     return token
 

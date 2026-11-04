@@ -29,7 +29,7 @@ from pretix_agent_mcp.pretix import PretixError
 from pretix_agent_mcp.server import build_app, http_app
 
 
-def receive_token(port: int) -> str:
+def receive_token(port: int, *, production: bool = False) -> str:
     """One-shot local transfer; the token is never a command-line argument or file."""
     nonce = secrets.token_urlsafe(24)
     received: list[str] = []
@@ -49,13 +49,19 @@ def receive_token(port: int) -> str:
         def do_GET(self):
             if self.path != "/" + nonce:
                 return self.reply(404, "Unavailable")
+            title = "Pretix production bootstrap" if production else "Pretix test-only verification"
+            explanation = (
+                "The token is sent only to this Mac and saved in its login Keychain."
+                if production
+                else "The API token stays in memory and is never written to disk."
+            )
+            button = "Save to this Mac's Keychain" if production else "Run test-only verification"
             self.reply(
                 200,
-                "<h1>Pretix test-only verification</h1>"
-                "<p>The API token stays in memory and is never written to disk.</p>"
-                '<form method="post"><label>Test-only API token '
+                f"<h1>{title}</h1><p>{explanation}</p>"
+                '<form method="post"><label>Pretix API token '
                 '<input name="token" type="text" autocomplete="off" spellcheck="false" required></label>'
-                "<button>Run test-only verification</button></form>",
+                f"<button>{button}</button></form>",
             )
 
         def do_POST(self):
@@ -72,10 +78,9 @@ def receive_token(port: int) -> str:
             if not token.isascii() or not token.isalnum() or not 20 <= len(token) <= 200:
                 return self.reply(400, "Invalid token format")
             received.append(token)
-            print(f"TOKEN_LENGTH={len(token)}", flush=True)
             self.reply(
                 200,
-                "<h1>Token received in memory</h1><p>Verification is running. You may close this tab.</p>",
+                "<h1>Token received</h1><p>Local verification is running. You may close this tab.</p>",
             )
 
     server = HTTPServer(("127.0.0.1", port), Handler)
