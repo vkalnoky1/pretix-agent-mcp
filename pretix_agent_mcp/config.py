@@ -33,6 +33,7 @@ class Config:
     # High-risk tools the operator reclassified to plain `write` (no approval ceremony).
     auto_approve: list[str] = field(default_factory=list)
     pii_mode: str = "redacted"
+    test_mode_only: bool = False
     mcp_bearer_token: str | None = None
     host: str = "127.0.0.1"
     port: int = 8765
@@ -54,9 +55,9 @@ class Config:
         return capability in self.capabilities
 
     def tool_enabled(self, name: str, capability: str) -> bool:
-        if self.tool_allowlist:
-            return name in self.tool_allowlist
-        return self.capability_enabled(capability)
+        return self.capability_enabled(capability) and (
+            not self.tool_allowlist or name in self.tool_allowlist
+        )
 
     def event_allowed(self, slug: str) -> bool:
         return not self.event_allowlist or slug in self.event_allowlist
@@ -118,6 +119,12 @@ def load(env: dict[str, str] | None = None, config_file: str | Path | None = Non
     if pii_mode not in {"redacted", "full"}:
         raise ConfigError("PII_MODE must be 'redacted' or 'full'")
 
+    test_mode_only = (get("PRETIX_TEST_MODE_ONLY") or "false").lower()
+    if test_mode_only not in {"true", "false"}:
+        raise ConfigError("PRETIX_TEST_MODE_ONLY must be 'true' or 'false'")
+    if test_mode_only == "true" and not get_list("PRETIX_EVENT_ALLOWLIST"):
+        raise ConfigError("PRETIX_TEST_MODE_ONLY requires an explicit PRETIX_EVENT_ALLOWLIST")
+
     cfg = Config(
         pretix_base_url=base_url,
         pretix_api_token=token,
@@ -127,6 +134,7 @@ def load(env: dict[str, str] | None = None, config_file: str | Path | None = Non
         tool_allowlist=get_list("MCP_TOOL_ALLOWLIST"),
         auto_approve=get_list("MCP_AUTO_APPROVE"),
         pii_mode=pii_mode,
+        test_mode_only=test_mode_only == "true",
         mcp_bearer_token=get("MCP_BEARER_TOKEN"),
         host=get("MCP_HOST") or "127.0.0.1",
         allowed_hosts=get_list("MCP_ALLOWED_HOSTS"),

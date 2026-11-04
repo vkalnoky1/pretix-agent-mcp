@@ -24,7 +24,7 @@ services:
     depends_on: [db, redis]
 
   agent-mcp:
-    image: ghcr.io/bitcoinaustria/pretix-agent-mcp:latest # or: build: .
+    build: . # Build this reviewed checkout, never an unaudited mutable image.
     restart: unless-stopped
     environment:
       # Reached over the internal network — the MCP server needs no public pretix URL.

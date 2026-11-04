@@ -158,6 +158,7 @@ async def create_subevents(
                         "name": quota_name or name,
                         "size": quota_size,
                         "items": items,
+                        "variations": [],
                         "subevent": subevent.get("id"),
                     },
                 )

@@ -69,6 +69,8 @@ async def get_event_settings(app: App, event: str, keys: list[str] | None = None
         return {"available_keys": sorted(settings), "note": "call again with keys=[...] to read values"}
     if len(keys) > 50:
         raise ValidationError("ask for at most 50 setting keys per call")
+    if any(_routes_mail(str(key)) or _routes_money(str(key)) for key in keys):
+        raise ValidationError("mail routing and payment credentials are not agent-readable settings")
     return {"settings": {key: i18n(settings.get(key)) for key in keys}}
 
 

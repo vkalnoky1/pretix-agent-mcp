@@ -1,5 +1,12 @@
 # pretix-agent-mcp
 
+## Hardened fork
+
+This fork adds locked runtime/build dependencies, execution-time approval expiry,
+stronger masking, private state files, rejection auditing, and a test-only write profile.
+Start with [HARDENING.md](HARDENING.md). Production write access is a separate rollout;
+the first verification must use a dedicated, hidden, disabled test-mode event.
+
 Run a self-hosted [pretix](https://pretix.eu) instance from an AI agent — without the
 pretix API token ever reaching the agent, and without giving it arbitrary REST access.
 
@@ -46,7 +53,8 @@ relaxation is an explicit config change. See [SECURITY.md](SECURITY.md).
 ```bash
 git clone https://github.com/bitcoinaustria/pretix-agent-mcp
 cd pretix-agent-mcp
-uv pip install -e .          # or: pip install -e .
+uv sync --locked --group build --no-install-project
+uv sync --locked --group build --no-build-isolation
 cp .env.example .env         # then edit it
 ```
 

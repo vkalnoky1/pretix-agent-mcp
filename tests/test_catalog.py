@@ -205,7 +205,9 @@ async def test_create_quota_keeps_null_size_for_unlimited(api, run):
     draft(api)
     api.route("POST", f"{EVENT}/quotas", {"id": 1, "name": "Workshop", "size": None}, status=201)
     await run("create_quota", event="conf27", name="Workshop", items=[1, 2])
-    assert api.sent("POST", f"{EVENT}/quotas") == [{"name": "Workshop", "items": [1, 2], "size": None}]
+    assert api.sent("POST", f"{EVENT}/quotas") == [
+        {"name": "Workshop", "items": [1, 2], "variations": [], "size": None}
+    ]
 
 
 async def test_create_quota_keeps_zero_size(api, run):
@@ -225,13 +227,22 @@ async def test_update_quota_unlimited(api, run):
 async def test_create_question_with_options(api, run):
     draft(api)
     api.route("POST", f"{EVENT}/questions", {"id": 3, "question": {"en": "Size"}, "type": "C"}, status=201)
-    await run("create_question", event="conf27", question="Size", type="C", required=True, options=["S", "M"])
+    await run(
+        "create_question",
+        event="conf27",
+        question="Size",
+        type="C",
+        required=True,
+        options=["S", "M"],
+        identifier="size",
+    )
     assert api.sent("POST", f"{EVENT}/questions") == [
         {
             "question": "Size",
             "type": "C",
             "required": True,
             "ask_during_checkin": False,
+            "identifier": "size",
             "options": [{"answer": "S"}, {"answer": "M"}],
         }
     ]

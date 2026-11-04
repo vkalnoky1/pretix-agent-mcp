@@ -44,8 +44,11 @@ class Audit:
         }
         line = json.dumps({k: v for k, v in record.items() if v is not None}, ensure_ascii=False)
         with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "a", encoding="utf-8") as fh:
+            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(self.path, flags, 0o600)
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "a", encoding="utf-8") as fh:
                 fh.write(line + "\n")
                 fh.flush()
                 os.fsync(fh.fileno())
