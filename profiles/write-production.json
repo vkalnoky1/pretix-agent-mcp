@@ -1,0 +1,12 @@
+{
+  "PRETIX_BASE_URL": "https://pretix.eu",
+  "PRETIX_ORGANIZER": "demo",
+  "PRETIX_EVENT_ALLOWLIST": ["sample-production-event", "mcp-write-test"],
+  "PRETIX_TEST_MODE_ONLY": "false",
+  "MCP_CAPABILITIES": ["read", "write", "write:high-risk"],
+  "MCP_AUTO_APPROVE": [],
+  "PII_MODE": "redacted",
+  "MCP_HOST": "127.0.0.1",
+  "STATE_DB": "work/runtime/pending.sqlite3",
+  "AUDIT_LOG": "work/runtime/audit.jsonl"
+}
