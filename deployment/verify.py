@@ -28,10 +28,10 @@ EVENT = "mcp-test-20261104"
 
 
 def unpack(result):
-    if getattr(result, "isError", False):
+    if getattr(result, "is_error", False):
         raise RuntimeError("MCP verification tool failed")
-    if result.structuredContent is not None:
-        return result.structuredContent
+    if result.structured_content is not None:
+        return result.structured_content
     return json.loads("".join(c.text for c in result.content if c.type == "text"))
 
 
@@ -61,7 +61,7 @@ async def verify(args, receipt):
                 assert {e["slug"] for e in visible["results"]} == set(cfg.event_allowlist)
                 checks.append("all eight authorized events readable")
                 denied = await session.call_tool("get_event", {"event": "custom-test-kp"})
-                assert denied.isError
+                assert denied.is_error
                 checks.append("out-of-scope event rejected by MCP")
                 event = unpack(await session.call_tool("get_event", {"event": EVENT}))
                 assert event["testmode"] and not event["live"] and not event["is_public"]
@@ -145,7 +145,7 @@ async def verify(args, receipt):
                 unpack(await session.call_tool("execute_pending_action", {"pending_action_id": action_id}))
                 receipt["removed_product"] = product["id"]
                 missing = await session.call_tool("get_product", {"event": EVENT, "item_id": product["id"]})
-                assert missing.isError
+                assert missing.is_error
                 checks.append("only this run's fixture approved, deleted and confirmed absent")
     await app.pretix.aclose()
     receipt["status"] = "passed"
